@@ -1,0 +1,14 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build with Script",
+            "type": "shell",
+            "command": "./build.sh", // A te scripted neve
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        }
+    ]
+}
