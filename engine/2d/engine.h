@@ -14,13 +14,22 @@ public:
     GLFWwindow* window;
     const double TARGET_FPS = 60.0;
     const double FRAME_TIME = 1.0 / TARGET_FPS;
-    std::chrono::_V2::system_clock::time_point start = std::chrono::high_resolution_clock::now();
+    std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> deltaTime = std::chrono::duration<double>::zero();
     std::set<Plane*> planes;
 
     Plane* CreatePlane(float x, float y, float width, float height, GLuint textureID=0) {
         Plane* newPlane = new Plane{x, y, width, height, textureID};
         planes.insert(newPlane);
         return newPlane;
+    }
+
+    bool RemovePlane(Plane* plane) {
+        if (plane == nullptr)
+            return false;
+        planes.erase(plane);
+        delete plane;
+        return true;
     }
 
     ~Engine() {
@@ -78,7 +87,11 @@ public:
     }
 
     void UpdateStart() {
-        start = std::chrono::high_resolution_clock::now();
+        auto now = std::chrono::high_resolution_clock::now();
+        deltaTime = now - start;
+        start = now;
+
+        double deltaTimeMs = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(deltaTime).count();
 
         // 1. Clear Screen
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
