@@ -20,10 +20,11 @@ bool cGame::Init()
 
     sound->PlaySound(SOUND_START);
 
+    GLuint dinoTex = engine->LoadTexture("data/graph/dino.png");
     GLuint playerTex = engine->LoadTexture("data/graph/player.png");
 
-    player = engine->CreatePlane(40.0f, 40.0f, 304.0f, 304.0f, playerTex);
-    enemy = engine->CreatePlane(10.0f, 10.0f, 64.0f, 64.0f, playerTex); // Reusing player texture for simplicity
+    player = engine->CreatePlane(40.0f, 40.0f, 152.0f, 268.0f, playerTex);
+    enemy = engine->CreatePlane(10.0f, 10.0f, 64.0f, 64.0f, dinoTex); // Reusing dino texture for simplicity
     return true;
 }
 

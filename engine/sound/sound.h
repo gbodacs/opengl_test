@@ -1,7 +1,8 @@
 #include "miniaudio.h"
 #include <cstdio>
 
-enum SoundType {
+enum SoundType 
+{
     SOUND_START,
     SOUND_END
 };
@@ -40,8 +41,8 @@ public:
 
     bool LoadSounds()
     {
-        if (!LoadSound("data/sound/start.wav", &StartSound)) return false;
-        if (!LoadSound("data/sound/end.wav", &EndSound)) return false;
+        if (!LoadSound("data/sound/ding.mp3", &StartSound)) return false;
+        if (!LoadSound("data/sound/menuselect.mp3", &EndSound)) return false;
         return true;
     }
 
@@ -52,7 +53,6 @@ public:
         ma_engine_uninit(&SoundEngine);
     }
 
-   
 
     bool PlaySound(SoundType sound)
     {
