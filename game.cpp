@@ -1,5 +1,6 @@
 #include "game.h"
 
+ma_sound startSound;
 
 bool cGame::Init()
 {
@@ -7,8 +8,18 @@ bool cGame::Init()
     if (!engine->Init(1024, 768, "My 2D Engine")) 
         return false;
 
-    InitInput();
-    
+    input = new Input();
+    input->Init();
+
+    sound = new Sound();
+    if (!sound->Init())
+        return false;
+
+    if (!sound->LoadSounds())
+        return false;
+
+    sound->PlaySound(SOUND_START);
+
     GLuint playerTex = engine->LoadTexture("data/graph/player.png");
 
     player = engine->CreatePlane(40.0f, 40.0f, 304.0f, 304.0f, playerTex);
@@ -19,27 +30,30 @@ bool cGame::Init()
 bool cGame::UpdateInput(float deltaTime)
 {
     // Poll Keyboard
-    if (InputHandler::GetKey(engine->window, GLFW_KEY_W) == PRESSED) {
+    if (input->GetKey(engine->window, GLFW_KEY_W) == PRESSED) {
         player->y -= deltaTime; // Move up
     }
-    if (InputHandler::GetKey(engine->window, GLFW_KEY_S) == PRESSED) {
+    if (input->GetKey(engine->window, GLFW_KEY_S) == PRESSED) {
         player->y += deltaTime; // Move down
     }
-    if (InputHandler::GetKey(engine->window, GLFW_KEY_D) == PRESSED) {
+    if (input->GetKey(engine->window, GLFW_KEY_D) == PRESSED) {
         player->x += deltaTime; // Move right
     }
-    if (InputHandler::GetKey(engine->window, GLFW_KEY_A) == PRESSED) {
+    if (input->GetKey(engine->window, GLFW_KEY_A) == PRESSED) {
         player->x -= deltaTime; // Move left
+        sound->PlaySound(SOUND_END); // Play sound on pressing 'A'
+    
     }
 
     //Exit?
-    if (InputHandler::GetKey(engine->window, GLFW_KEY_ESCAPE) == PRESSED) {
+    if (input->GetKey(engine->window, GLFW_KEY_ESCAPE) == PRESSED) {
         return true; // Signal to quit
     }
 
     // Poll Gamepad
-    ControllerState pad = PollGamepad(GLFW_JOYSTICK_1);
-    if (pad.connected) {
+    ControllerState pad = input->GetGamepad(GLFW_JOYSTICK_1);
+    if (pad.connected) 
+    {
         if (pad.leftStickX < 0.1f && pad.leftStickX > -0.1f) pad.leftStickX = 0.0f; // Deadzone
         if (pad.leftStickY < 0.08f && pad.leftStickY > -0.08f) pad.leftStickY = 0.0f; // Deadzone
 
@@ -54,7 +68,7 @@ bool cGame::Run()
 {
     bool quit = false;
     while (!glfwWindowShouldClose(engine->window) && !quit) 
-    {    
+    {
         float dTime = engine->UpdateStart();
         quit = UpdateInput(dTime);
 
@@ -71,13 +85,20 @@ bool cGame::Run()
 }
 
 bool cGame::Done()
-{
+{   
+    sound->Done();
+    delete sound;
+
+    delete input;
+
     engine->Done();
     delete engine;
+
     return true;
 }
 
-int main() {
+int main() 
+{
     printf("Start\n\r");
     cGame Game;
     if (Game.Init())

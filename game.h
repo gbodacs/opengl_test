@@ -1,6 +1,8 @@
 #include "engine/2d/engine.h"
 #include "engine/input/input.h"
 #include "engine/2d/plane.h"
+#include "engine/input/input.h"
+#include "engine/sound/sound.h"
 
 class cGame
 {
@@ -9,6 +11,8 @@ protected:
 
 public:
     Engine* engine;
+    Input* input;
+    Sound* sound;
 
     Plane* player;
     Plane* enemy;
