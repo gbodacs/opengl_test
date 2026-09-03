@@ -86,18 +86,19 @@ public:
         return true;
     }
 
-    void UpdateStart() {
+    float UpdateStart() {
+        // 1. Clear Screen
+        glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+        glLoadIdentity(); // Alaphelyzetbe állítja a Modelview mátrixot
+        
         auto now = std::chrono::high_resolution_clock::now();
         deltaTime = now - start;
         start = now;
 
         double deltaTimeMs = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(deltaTime).count();
 
-        // 1. Clear Screen
-        glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
-        glLoadIdentity(); // Alaphelyzetbe állítja a Modelview mátrixot
-
+        return deltaTimeMs;
     }
 
     void RenderAllPlanes() {

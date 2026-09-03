@@ -4,6 +4,9 @@
 
 class cGame
 {
+protected:
+    bool UpdateInput(float deltaTime);
+
 public:
     Engine* engine;
 
