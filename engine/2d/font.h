@@ -18,11 +18,14 @@ std::map<int, Character> fontMap;
 float texW = 512.0f; // Total width of your texture atlas
 float texH = 512.0f; // Total height of your texture atlas
 
-void LoadFontMetadata(const std::string& filename) {
+void LoadFontMetadata(const std::string& filename) 
+{
     std::ifstream file(filename);
     std::string line;
-    while (std::getline(file, line)) {
-        if (line.substr(0, 4) == "char") {
+    while (std::getline(file, line)) 
+    {
+        if (line.substr(0, 4) == "char") 
+        {
             Character c;
             int id;
             // Simplified parsing - in a real engine, use a more robust string splitter
@@ -33,15 +36,18 @@ void LoadFontMetadata(const std::string& filename) {
     }
 }
 
-void DrawStringProportional(float x, float y, std::string text, GLuint fontTexture) {
+void DrawStringProportional(float x, float y, std::string text, GLuint fontTexture) 
+{
     glEnable(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, fontTexture);
     glBegin(GL_QUADS);
 
     float cursorX = x;
 
-    for (char charCode : text) {
-        if (fontMap.find(charCode) == fontMap.end()) continue;
+    for (char charCode : text) 
+    {
+        if (fontMap.find(charCode) == fontMap.end()) 
+            continue;
 
         Character& c = fontMap[charCode];
 

@@ -4,6 +4,7 @@
 #include "engine/input/input.h"
 #include "engine/sound/sound.h"
 
+
 class cGame
 {
 protected:
@@ -14,7 +15,7 @@ public:
     Input* input;
     Sound* sound;
 
-    Plane* player;
+    AnimatedGameObject* player;
     Plane* enemy;
     
     bool Init();

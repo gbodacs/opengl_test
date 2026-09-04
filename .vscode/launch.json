@@ -5,14 +5,14 @@
     "version": "0.2.0",
     "configurations": [
     {
-        "preLaunchTask": "Build with Script",
-        "name": "(gdb) Launch",
+        "preLaunchTask": "CMake: build binary",
+        "name": "(gdb) Launch CMake",
         "type": "cppdbg",
         "request": "launch",
-        "program": "${workspaceRoot}/test",
+        "program": "${workspaceFolder}/build/test",
         "args": [],
         "stopAtEntry": false,
-        "cwd": "${fileDirname}",
+        "cwd": "${workspaceFolder}",
         "environment": [],
         "externalConsole": false,
         "miDebuggerPath": "/usr/bin/gdb",

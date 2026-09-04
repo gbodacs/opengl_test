@@ -21,9 +21,22 @@ bool cGame::Init()
     sound->PlaySound(SOUND_START);
 
     GLuint dinoTex = engine->LoadTexture("data/graph/dino.png");
-    GLuint playerTex = engine->LoadTexture("data/graph/player.png");
+    GLuint boy1 = engine->LoadTexture("data/graph/boy1.png");
+    GLuint boy2 = engine->LoadTexture("data/graph/boy2.png");
+    GLuint boy3 = engine->LoadTexture("data/graph/boy3.png");
+    GLuint boy4 = engine->LoadTexture("data/graph/boy4.png");
+    GLuint boy5 = engine->LoadTexture("data/graph/boy5.png");
+    GLuint boy6 = engine->LoadTexture("data/graph/boy6.png");
 
-    player = engine->CreatePlane(40.0f, 40.0f, 152.0f, 268.0f, playerTex);
+    player = engine->CreateAnimatedGameObject(40.0f, 40.0f, 131.0f, 251.0f);
+    player->AddFrame(0.15f, boy1);
+    player->AddFrame(0.3f, boy2);
+    player->AddFrame(0.45f, boy3);
+    player->AddFrame(0.6f, boy4);
+    player->AddFrame(0.75f, boy5);
+    player->AddFrame(0.9f, boy6);
+    player->mirrored = false; // Player is not mirrored
+
     enemy = engine->CreatePlane(10.0f, 10.0f, 64.0f, 64.0f, dinoTex); // Reusing dino texture for simplicity
     return true;
 }
@@ -32,18 +45,23 @@ bool cGame::UpdateInput(float deltaTime)
 {
     // Poll Keyboard
     if (input->GetKey(engine->window, GLFW_KEY_W) == PRESSED) {
-        player->y -= deltaTime; // Move up
+        player->y -= deltaTime * 100.0f; // Move up
     }
     if (input->GetKey(engine->window, GLFW_KEY_S) == PRESSED) {
-        player->y += deltaTime; // Move down
+        player->y += deltaTime * 100.0f; // Move down
     }
     if (input->GetKey(engine->window, GLFW_KEY_D) == PRESSED) {
-        player->x += deltaTime; // Move right
+        player->x += deltaTime * 100.0f; // Move right
+        player->mirrored = false;
     }
     if (input->GetKey(engine->window, GLFW_KEY_A) == PRESSED) {
-        player->x -= deltaTime; // Move left
+        player->x -= deltaTime * 100.0f; // Move left
+        player->mirrored = true;
         sound->PlaySound(SOUND_END); // Play sound on pressing 'A'
-    
+    }
+
+    if (input->GetKey(engine->window, GLFW_KEY_SPACE) == PRESSED) {
+       player->SetAnimating(!player->GetAnimating()); // Toggle animation on spacebar
     }
 
     //Exit?
@@ -55,11 +73,22 @@ bool cGame::UpdateInput(float deltaTime)
     ControllerState pad = input->GetGamepad(GLFW_JOYSTICK_1);
     if (pad.connected) 
     {
-        if (pad.leftStickX < 0.1f && pad.leftStickX > -0.1f) pad.leftStickX = 0.0f; // Deadzone
-        if (pad.leftStickY < 0.08f && pad.leftStickY > -0.08f) pad.leftStickY = 0.0f; // Deadzone
+        if (pad.leftStickX < 0.1f && pad.leftStickX > -0.1f) 
+        {
+            pad.leftStickX = 0.0f; // Deadzone
+        } else
+        {
+            player->x += pad.leftStickX * deltaTime * 100.0f; // Adjust speed as needed
+            player->mirrored = (pad.leftStickX < 0.0f); // Mirror if moving left
+        }
 
-        player->x += pad.leftStickX * deltaTime; // Adjust speed as needed
-        player->y += pad.leftStickY * deltaTime; // Y is usually inverted on sticks
+        if (pad.leftStickY < 0.08f && pad.leftStickY > -0.08f) 
+        {
+            pad.leftStickY = 0.0f; // Deadzone
+        } else
+        {
+            player->y += pad.leftStickY * deltaTime * 100.0f; // Y is usually inverted on sticks
+        }
     }
 
     return false;
@@ -71,13 +100,13 @@ bool cGame::Run()
     while (!glfwWindowShouldClose(engine->window) && !quit) 
     {
         float dTime = engine->UpdateStart();
+        engine->UpdateAllPlanes(dTime);
+        engine->RenderAllPlanes();
+        engine->UpdateEnd();
+
         quit = UpdateInput(dTime);
 
-        engine->RenderAllPlanes();
-
-        engine->UpdateEnd();
-        
-        if (player->Intersects(*enemy)) {
+        if (player->Intersects((Plane&)*enemy)) {
             // Logic for collision
             printf("Collision\n\r");
         }

@@ -32,7 +32,8 @@ struct ControllerState
 };
 
 // Keyboard input handling
-class Input {
+class Input 
+{
 protected:
     std::string load_file(const std::string& path) 
     {
