@@ -9,6 +9,7 @@ public:
     GLuint  textureID=0;
     bool    mirrored = false;
     float   red=1.0f, green=1.0f, blue=1.0f; // White
+    float   u0 = 0.0f, v0 = 0.0f, u1 = 1.0f, v1 = 1.0f;
 
     Plane(float x, float y, float width, float height, GLuint textureID=0) {
         this->x = x;
@@ -42,8 +43,11 @@ public:
         textureID = texID;
     }
 
-    virtual void Update(float deltaTime) 
+    void SetUV(float _u0, float _v0, float _u1, float _v1)
     {
-        // Default implementation does nothing
+        u0 = _u0;
+        v0 = _v0;
+        u1 = _u1;
+        v1 = _v1;
     }
 };

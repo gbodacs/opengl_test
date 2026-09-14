@@ -16,12 +16,12 @@ find_package(GLEW REQUIRED)
 find_package(glfw3 REQUIRED)
 
 add_executable(test
-    game.cpp
+    game/game.cpp
     engine/sound/miniaudio.c
 )
 
 target_include_directories(test PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/game
     ${CMAKE_CURRENT_SOURCE_DIR}/engine
     ${CMAKE_CURRENT_SOURCE_DIR}/engine/2d
     ${CMAKE_CURRENT_SOURCE_DIR}/engine/input

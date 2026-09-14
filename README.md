@@ -71,3 +71,24 @@ sudo apt-get install -y libgl1-mesa-dev libglew-dev libglfw3-dev
 
 - The project bundles the audio engine source in `engine/sound/miniaudio.c` and links it into the final executable.
 - The CMake target is named `test` so the output matches the legacy build script.
+
+## Text Rendering
+
+The engine now supports bitmap-font text rendering through `Engine::PrintText(...)`.
+
+1. Prepare a BMFont text metadata file (`.fnt`) and matching atlas texture (for example `font.png`).
+2. Load metadata and texture:
+
+```cpp
+BitmapFont uiFont;
+uiFont.LoadMetadata("data/graph/font.fnt");
+uiFont.SetTexture(engine->LoadTexture("data/graph/font.png"));
+```
+
+3. Draw text each frame after `UpdateStart()`:
+
+```cpp
+engine->PrintText(uiFont, 16.0f, 24.0f, "Hello OpenGL", 1.0f, 1.0f, 1.0f, 0.0f);
+```
+
+`PrintText` renders each glyph via the existing `Plane` quad path, using per-glyph UV coordinates from the font atlas.

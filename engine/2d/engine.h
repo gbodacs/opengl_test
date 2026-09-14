@@ -1,14 +1,17 @@
 #pragma once
+
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <iostream>
 #include <thread>
 #include <chrono>
 #include <set>
+#include <string>
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 #include "plane.h"
-#include "gameobject.h"
+#include "objects/animatedgameobject.h"
+#include "font.h"
 
 class Engine 
 {
@@ -27,11 +30,12 @@ public:
         return newPlane;
     }
 
-    AnimatedGameObject* CreateAnimatedGameObject(float x, float y, float width, float height) 
+    bool AddPlane(Plane* plane) 
     {
-        AnimatedGameObject* newObj = new AnimatedGameObject{x, y, width, height};
-        planes.insert(newObj);
-        return newObj;
+        if (plane == nullptr)
+            return false;
+        planes.insert(plane);
+        return true;
     }
 
     bool RemovePlane(Plane* plane) 
@@ -120,14 +124,6 @@ public:
         return deltaTimeMs/1000.0f; // Return deltaTime in seconds
     }
 
-    void UpdateAllPlanes(float deltaTime) 
-    {
-        for (Plane* p : planes) 
-        {
-            p->Update(deltaTime);
-        }
-    }
-
     void RenderAllPlanes() 
     {
         for (Plane* p : planes) 
@@ -141,7 +137,7 @@ public:
         glPushMatrix(); // Elmenti az aktuális mátrix állapotot
         
         // 1. Pozicionálás
-        glTranslatef(p->x, p->y, 0); // Így a glBegin-ben (0,0)-ról indulhatsz
+        glTranslatef(p->x, p->y, 0); // glBegin-ben (0,0)-ról indulhatsz
 
         // 2. Textúra kezelés
         if (p->textureID != 0) 
@@ -165,13 +161,63 @@ public:
         }
 
         glBegin(GL_QUADS);
-            glTexCoord2f(0, 0); glVertex2f(0, 0);
-            glTexCoord2f(1, 0); glVertex2f(p->width, 0);
-            glTexCoord2f(1, 1); glVertex2f(p->width, p->height);
-            glTexCoord2f(0, 1); glVertex2f(0, p->height);
+            glTexCoord2f(p->u0, p->v0); glVertex2f(0, 0);
+            glTexCoord2f(p->u1, p->v0); glVertex2f(p->width, 0);
+            glTexCoord2f(p->u1, p->v1); glVertex2f(p->width, p->height);
+            glTexCoord2f(p->u0, p->v1); glVertex2f(0, p->height);
         glEnd();
 
         glPopMatrix(); // Visszaállítja a mátrixot a rajzolás előtti állapotra
+    }
+
+    void PrintText(const BitmapFont& font, float x, float y, const std::string& text,
+                   float scale = 1.0f, float red = 1.0f, float green = 1.0f, float blue = 1.0f)
+    {
+        if (font.textureID == 0 || font.atlasWidth <= 0.0f || font.atlasHeight <= 0.0f)
+        {
+            return;
+        }
+
+        float cursorX = x;
+        float cursorY = y;
+
+        for (char c : text)
+        {
+            if (c == '\n')
+            {
+                cursorX = x;
+                cursorY += font.lineHeight * scale;
+                continue;
+            }
+
+            const Character* glyph = font.GetCharacter(static_cast<unsigned char>(c));
+            if (glyph == nullptr)
+            {
+                glyph = font.GetCharacter('?');
+                if (glyph == nullptr)
+                {
+                    continue;
+                }
+            }
+
+            Plane glyphPlane(
+                cursorX + glyph->xoffset * scale,
+                cursorY + glyph->yoffset * scale,
+                glyph->width * scale,
+                glyph->height * scale,
+                font.textureID
+            );
+            glyphPlane.SetColor(red, green, blue);
+
+            const float u0 = glyph->x / font.atlasWidth;
+            const float v0 = glyph->y / font.atlasHeight;
+            const float u1 = (glyph->x + glyph->width) / font.atlasWidth;
+            const float v1 = (glyph->y + glyph->height) / font.atlasHeight;
+            glyphPlane.SetUV(u0, v0, u1, v1);
+
+            DrawPlane(&glyphPlane);
+            cursorX += glyph->xadvance * scale;
+        }
     }
 
     void UpdateEnd() 

@@ -1,74 +1,140 @@
-#pragma once 
-#include <map>
-#include <fstream>
-#include <string>
-#include <sstream>
-#include <GL/glew.h>
-#include <GLFW/glfw3.h>
+#pragma once
 
-struct Character {
-    float x, y;             // Position in the texture (pixels)
-    float width, height;    // Size of the character (pixels)
-    float xoffset, yoffset; // How much to shift when rendering
-    float xadvance;         // How far to move the cursor for the next char
+#include <fstream>
+#include <map>
+#include <sstream>
+#include <string>
+
+#include <GL/glew.h>
+
+struct Character
+{
+    float x = 0.0f;
+    float y = 0.0f;
+    float width = 0.0f;
+    float height = 0.0f;
+    float xoffset = 0.0f;
+    float yoffset = 0.0f;
+    float xadvance = 0.0f;
 };
 
-std::map<int, Character> fontMap;
-
-float texW = 512.0f; // Total width of your texture atlas
-float texH = 512.0f; // Total height of your texture atlas
-
-void LoadFontMetadata(const std::string& filename) 
+class BitmapFont
 {
-    std::ifstream file(filename);
-    std::string line;
-    while (std::getline(file, line)) 
+public:
+    std::map<int, Character> glyphs;
+    GLuint textureID = 0;
+    float atlasWidth = 512.0f;
+    float atlasHeight = 512.0f;
+    float lineHeight = 32.0f;
+
+    bool LoadMetadata(const std::string& filename)
     {
-        if (line.substr(0, 4) == "char") 
+        std::ifstream file(filename);
+        if (!file.is_open())
         {
-            Character c;
-            int id;
-            // Simplified parsing - in a real engine, use a more robust string splitter
-            sscanf(line.c_str(), "char id=%d x=%f y=%f width=%f height=%f xoffset=%f yoffset=%f xadvance=%f",
-                   &id, &c.x, &c.y, &c.width, &c.height, &c.xoffset, &c.yoffset, &c.xadvance);
-            fontMap[id] = c;
+            return false;
+        }
+
+        glyphs.clear();
+
+        std::string line;
+        while (std::getline(file, line))
+        {
+            if (line.rfind("common", 0) == 0)
+            {
+                ParseCommonLine(line);
+            }
+            else if (line.rfind("char ", 0) == 0)
+            {
+                ParseCharLine(line);
+            }
+        }
+
+        return !glyphs.empty();
+    }
+
+    void SetTexture(GLuint texture)
+    {
+        textureID = texture;
+    }
+
+    const Character* GetCharacter(int codepoint) const
+    {
+        std::map<int, Character>::const_iterator it = glyphs.find(codepoint);
+        if (it == glyphs.end())
+        {
+            return nullptr;
+        }
+        return &it->second;
+    }
+
+private:
+    static bool ExtractValue(const std::string& token, const char* key, float& value)
+    {
+        const std::string prefix = std::string(key) + "=";
+        if (token.rfind(prefix, 0) != 0)
+        {
+            return false;
+        }
+        value = std::stof(token.substr(prefix.size()));
+        return true;
+    }
+
+    static bool ExtractIntValue(const std::string& token, const char* key, int& value)
+    {
+        const std::string prefix = std::string(key) + "=";
+        if (token.rfind(prefix, 0) != 0)
+        {
+            return false;
+        }
+        value = std::stoi(token.substr(prefix.size()));
+        return true;
+    }
+
+    void ParseCommonLine(const std::string& line)
+    {
+        std::istringstream ss(line);
+        std::string token;
+        while (ss >> token)
+        {
+            float value = 0.0f;
+            if (ExtractValue(token, "lineHeight", value))
+            {
+                lineHeight = value;
+            }
+            else if (ExtractValue(token, "scaleW", value))
+            {
+                atlasWidth = value;
+            }
+            else if (ExtractValue(token, "scaleH", value))
+            {
+                atlasHeight = value;
+            }
         }
     }
-}
 
-void DrawStringProportional(float x, float y, std::string text, GLuint fontTexture) 
-{
-    glEnable(GL_TEXTURE_2D);
-    glBindTexture(GL_TEXTURE_2D, fontTexture);
-    glBegin(GL_QUADS);
-
-    float cursorX = x;
-
-    for (char charCode : text) 
+    void ParseCharLine(const std::string& line)
     {
-        if (fontMap.find(charCode) == fontMap.end()) 
-            continue;
+        std::istringstream ss(line);
+        std::string token;
+        Character ch;
+        int id = -1;
 
-        Character& c = fontMap[charCode];
+        while (ss >> token)
+        {
+            ExtractIntValue(token, "id", id);
+            ExtractValue(token, "x", ch.x);
+            ExtractValue(token, "y", ch.y);
+            ExtractValue(token, "width", ch.width);
+            ExtractValue(token, "height", ch.height);
+            ExtractValue(token, "xoffset", ch.xoffset);
+            ExtractValue(token, "yoffset", ch.yoffset);
+            ExtractValue(token, "xadvance", ch.xadvance);
+        }
 
-        // Convert pixel coordinates to 0.0 - 1.0 UV coordinates
-        float u = c.x / texW;
-        float v = c.y / texH;
-        float uw = c.width / texW;
-        float vh = c.height / texH;
-
-        // Calculate screen positions using offsets
-        float posX = cursorX + c.xoffset;
-        float posY = y + c.yoffset;
-
-        glTexCoord2f(u, v);           glVertex2f(posX, posY);
-        glTexCoord2f(u + uw, v);      glVertex2f(posX + c.width, posY);
-        glTexCoord2f(u + uw, v + vh); glVertex2f(posX + c.width, posY + c.height);
-        glTexCoord2f(u, v + vh);      glVertex2f(posX, posY + c.height);
-
-        // Move cursor by xadvance for the next letter
-        cursorX += c.xadvance;
+        if (id >= 0)
+        {
+            glyphs[id] = ch;
+        }
     }
-
-    glEnd();
-}
+};
