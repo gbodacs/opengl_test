@@ -8,6 +8,7 @@ bool cGame::Init()
     engine = new Engine();
     if (!engine->Init(1024, 768, "My 2D Engine")) 
         return false;
+    engine->cameraDistance = 6.0f;
 
     input = new Input();
     input->Init();
@@ -21,6 +22,12 @@ bool cGame::Init()
 
     sound->PlaySound(SOUND_START);
 
+    menu = new Menu({
+    { "Start Game", {}, [](){ /* ... */ }, 0, true, true },
+    { "Options", { { "Sound", {}, [](){}, 0, true, false }, { "Back", {}, nullptr } } },
+    { "Exit", {}, [this](){ glfwSetWindowShouldClose(engine->window, true); }, 0, true, true }
+});
+
     uiFont.LoadMetadata("data/graph/font/font.fnt");
     uiFont.SetTexture(engine->LoadTexture("data/graph/font/font.png"));
 
@@ -31,13 +38,24 @@ bool cGame::Init()
     GLuint boy4 = engine->LoadTexture("data/graph/boy4.png");
     GLuint boy5 = engine->LoadTexture("data/graph/boy5.png");
     GLuint boy6 = engine->LoadTexture("data/graph/boy6.png");
+    GLuint boyIdle = engine->LoadTexture("data/graph/boy_idle.png");
+
+    demoMesh = engine->LoadMesh("data/models/test_cube.obj");
+    if (demoMesh == nullptr)
+        return false;
+
+    demoMesh->rotationX = -20.0f;
+    demoMesh->rotationY = 30.0f;
+    demoMesh->scaleX = 1.25f;
+    demoMesh->scaleY = 1.25f;
+    demoMesh->scaleZ = 1.25f;
 
     player = new Player(40.0f, 40.0f, 131.0f, 251.0f);
     engine->AddPlane(player->GetPlane());
 
     const int animID = player->AddAnimation();
     //__assert(animID == PlayerAnims::Idle, "Animation ID should be Idle");
-    player->AddFrame(PlayerAnims::Idle, 0.15f, boy1);
+    player->AddFrame(PlayerAnims::Idle, 0.15f, boyIdle);
 
     const int animID2 = player->AddAnimation();
     //__assert(animID2 == PlayerAnims::Jump, "Animation ID should be Jump");
@@ -59,27 +77,29 @@ bool cGame::Init()
 
 bool cGame::UpdateInput(float deltaTime)
 {
+    const InputSnapshot& state = input->GetState();
+
     // Poll Keyboard
-    if (input->GetKey(engine->window, GLFW_KEY_W) == PRESSED) 
+    if (state.w.down)
     {
         player->GetPlane()->y -= deltaTime * 100.0f; // Move up
         playerPrevUp = true;
     }
 
-    if (input->GetKey(engine->window, GLFW_KEY_S) == PRESSED) 
+    if (state.s.down)
     {
         player->GetPlane()->y += deltaTime * 100.0f; // Move down
         playerPrevDown = true;
     }
 
-    if (input->GetKey(engine->window, GLFW_KEY_D) == PRESSED) 
+    if (state.d.down)
     {
         player->GetPlane()->x += deltaTime * 100.0f; // Move right
         player->GetPlane()->mirrored = false;
         playerPrevRight = true;
     }
 
-    if (input->GetKey(engine->window, GLFW_KEY_A) == PRESSED) 
+    if (state.a.down)
     {
         player->GetPlane()->x -= deltaTime * 100.0f; // Move left
         player->GetPlane()->mirrored = true;
@@ -87,19 +107,30 @@ bool cGame::UpdateInput(float deltaTime)
         sound->PlaySound(SOUND_END); // Play sound on pressing 'A'
     }
 
-    if (input->GetKey(engine->window, GLFW_KEY_SPACE) == PRESSED) 
+    if (state.space.down)
     {
-       player->SetAnimating(!player->GetAnimating()); // Toggle animation on spacebar
+        playerPrevJump = true;
+    }
+    else
+    {
+        if (playerPrevJump)
+        {
+            if (player->GetCurrentAnimation() != PlayerAnims::Idle)
+                player->SetCurrentAnimation(PlayerAnims::Idle); // Toggle animation on spacebar
+            else
+                player->SetCurrentAnimation(PlayerAnims::Jump); // Toggle back to jump if not idle
+        }
+        playerPrevJump = false;
     }
 
     //Exit?
-    if (input->GetKey(engine->window, GLFW_KEY_ESCAPE) == PRESSED) 
+    if (state.esc.down)
     {
         return true; // Signal to quit
     }
 
     // Poll Gamepad
-    ControllerState pad = input->GetGamepad(GLFW_JOYSTICK_1);
+    /*ControllerState pad = input->GetGamepad(GLFW_JOYSTICK_1);
     if (pad.connected) 
     {
         if (pad.leftStickX < 0.1f && pad.leftStickX > -0.1f) 
@@ -134,7 +165,7 @@ bool cGame::UpdateInput(float deltaTime)
             }
             player->GetPlane()->y += pad.leftStickY * deltaTime * 100.0f; // Y is usually inverted on sticks
         }
-    }
+    }*/
 
     return false;
 }
@@ -145,18 +176,33 @@ bool cGame::Run()
     while (!glfwWindowShouldClose(engine->window) && !quit) 
     {
         float dTime = engine->UpdateStart();
-        player->Update(dTime);
-        enemy->Update(dTime);
-        engine->RenderAllPlanes();
-        
-        if (player->GetPlane()->Intersects((Plane&)*enemy->GetPlane())) 
+        input->Update(engine->window);
+        if (gameState == GameStates::Menu)                  // MENU
         {
-            engine->PrintText(uiFont, 0.0f, 0.0f, "Collision", 1.0f, 1.0f, 1.0f, 1.0f);
+            menu->Update(dTime);
+            bool closeMenu = menu->HandleInput(input->GetState());
+            menu->Render(*engine, uiFont, 50.0f, 50.0f);
+        } else if (gameState == GameStates::Playing)        // GAME
+        {
+            player->Update(dTime);
+            enemy->Update(dTime);
+            demoMeshSpin += dTime * 45.0f;
+            demoMesh->rotationY = demoMeshSpin;
+
+            engine->RenderAllMeshes();
+            engine->RenderAllPlanes();
+
+            if (player->GetPlane()->Intersects((Plane&)*enemy->GetPlane())) 
+            {
+                engine->PrintText(uiFont, 0.0f, 0.0f, "Collision", 1.0f, 1.0f, 1.0f, 1.0f);
+            }
         }
+        
 
         engine->UpdateEnd();
 
         quit = UpdateInput(dTime);
+        
     }
     return true;
 }
@@ -167,6 +213,8 @@ bool cGame::Done()
     delete sound;
 
     delete input;
+
+    demoMesh = nullptr;
 
     engine->Done();
     delete engine;

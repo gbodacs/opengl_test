@@ -2,6 +2,7 @@
 
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
+#include <cmath>
 #include <iostream>
 #include <thread>
 #include <chrono>
@@ -12,6 +13,8 @@
 #include "plane.h"
 #include "objects/animatedgameobject.h"
 #include "font.h"
+#include "../3d/mesh.h"
+#include "../3d/objloader.h"
 
 class Engine 
 {
@@ -22,6 +25,11 @@ public:
     std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> deltaTime = std::chrono::duration<double>::zero();
     std::set<Plane*> planes;
+    std::set<Mesh3D*> meshes;
+    int viewportWidth = 0;
+    int viewportHeight = 0;
+    float cameraDistance = 5.0f;
+    float cameraFovDegrees = 60.0f;
 
     Plane* CreatePlane(float x, float y, float width, float height, GLuint textureID=0) 
     {
@@ -38,6 +46,14 @@ public:
         return true;
     }
 
+    bool AddMesh(Mesh3D* mesh)
+    {
+        if (mesh == nullptr)
+            return false;
+        meshes.insert(mesh);
+        return true;
+    }
+
     bool RemovePlane(Plane* plane) 
     {
         if (plane == nullptr)
@@ -47,11 +63,50 @@ public:
         return true;
     }
 
+    bool RemoveMesh(Mesh3D* mesh)
+    {
+        if (mesh == nullptr)
+            return false;
+        meshes.erase(mesh);
+        delete mesh;
+        return true;
+    }
+
+    Mesh3D* LoadMesh(const char* filename)
+    {
+        Mesh3D* mesh = new Mesh3D();
+        std::string diffuseTexturePath;
+        if (!LoadOBJMesh(filename, *mesh, &diffuseTexturePath))
+        {
+            delete mesh;
+            return nullptr;
+        }
+
+        if (!diffuseTexturePath.empty())
+        {
+            const GLuint textureID = LoadTexture(diffuseTexturePath.c_str());
+            if (textureID == 0)
+            {
+                delete mesh;
+                return nullptr;
+            }
+            mesh->SetTexture(textureID);
+        }
+
+        meshes.insert(mesh);
+        return mesh;
+    }
+
     ~Engine() 
     {
         for (Plane* p : planes) 
         {
             delete p;
+        }
+
+        for (Mesh3D* mesh : meshes)
+        {
+            delete mesh;
         }
     }
 
@@ -62,6 +117,8 @@ public:
         glBindTexture(GL_TEXTURE_2D, textureID);
 
         // Set wrapping/filtering options
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
@@ -73,6 +130,13 @@ public:
             glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
             stbi_image_free(data);
         }
+        else
+        {
+            std::cerr << "Failed to load texture: " << filename << std::endl;
+            glDeleteTextures(1, &textureID);
+            return 0;
+        }
+
         return textureID;
     }
 
@@ -93,17 +157,15 @@ public:
         
         glfwMakeContextCurrent(window);
         glewInit();
+        viewportWidth = width;
+        viewportHeight = height;
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glEnable(GL_DEPTH_TEST);
+        glDepthFunc(GL_LEQUAL);
 
-        // Setup Ortho Projection
         glViewport(0, 0, width, height);
-        glMatrixMode(GL_PROJECTION);
-        glLoadIdentity();
-        // Left, Right, Bottom, Top, Near, Far
-        glOrtho(0, width, height, 0, -10000, 10000); 
-        glMatrixMode(GL_MODELVIEW);
-        glLoadIdentity();
+        Begin2DPass();
         
         return true;
     }
@@ -112,8 +174,8 @@ public:
     {
         // 1. Clear Screen
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
-        glLoadIdentity(); // Alaphelyzetbe állítja a Modelview mátrixot
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        Begin2DPass();
         
         auto now = std::chrono::high_resolution_clock::now();
         deltaTime = now - start;
@@ -130,6 +192,24 @@ public:
         {
             DrawPlane(p);
         }
+    }
+
+    void RenderAllMeshes()
+    {
+        if (meshes.empty())
+        {
+            return;
+        }
+
+        Begin3DPass();
+        glTranslatef(0.0f, 0.0f, -cameraDistance);
+
+        for (Mesh3D* mesh : meshes)
+        {
+            DrawMesh(mesh);
+        }
+
+        Begin2DPass();
     }
 
     void DrawPlane(Plane* p) 
@@ -168,6 +248,45 @@ public:
         glEnd();
 
         glPopMatrix(); // Visszaállítja a mátrixot a rajzolás előtti állapotra
+    }
+
+    void DrawMesh(Mesh3D* mesh)
+    {
+        if (mesh == nullptr || !mesh->IsValid())
+        {
+            return;
+        }
+
+        glPushMatrix();
+        glTranslatef(mesh->x, mesh->y, mesh->z);
+        glRotatef(mesh->rotationX, 1.0f, 0.0f, 0.0f);
+        glRotatef(mesh->rotationY, 0.0f, 1.0f, 0.0f);
+        glRotatef(mesh->rotationZ, 0.0f, 0.0f, 1.0f);
+        glScalef(mesh->scaleX, mesh->scaleY, mesh->scaleZ);
+
+        if (mesh->textureID != 0)
+        {
+            glEnable(GL_TEXTURE_2D);
+            glBindTexture(GL_TEXTURE_2D, mesh->textureID);
+        }
+        else
+        {
+            glDisable(GL_TEXTURE_2D);
+        }
+
+        glColor3f(mesh->red, mesh->green, mesh->blue);
+
+        glBegin(GL_TRIANGLES);
+        for (unsigned int index : mesh->indices)
+        {
+            const MeshVertex& vertex = mesh->vertices[index];
+            glNormal3f(vertex.normal.x, vertex.normal.y, vertex.normal.z);
+            glTexCoord2f(vertex.uv.x, vertex.uv.y);
+            glVertex3f(vertex.position.x, vertex.position.y, vertex.position.z);
+        }
+        glEnd();
+
+        glPopMatrix();
     }
 
     void PrintText(const BitmapFont& font, float x, float y, const std::string& text,
@@ -239,5 +358,37 @@ public:
     {
         glfwDestroyWindow(window);
         glfwTerminate();
+    }
+
+private:
+    void Begin2DPass()
+    {
+        glDisable(GL_DEPTH_TEST);
+        glMatrixMode(GL_PROJECTION);
+        glLoadIdentity();
+        glOrtho(0, viewportWidth, viewportHeight, 0, -10000, 10000);
+        glMatrixMode(GL_MODELVIEW);
+        glLoadIdentity();
+    }
+
+    void Begin3DPass()
+    {
+        glEnable(GL_DEPTH_TEST);
+
+        const float aspectRatio = (viewportHeight > 0)
+            ? static_cast<float>(viewportWidth) / static_cast<float>(viewportHeight)
+            : 1.0f;
+        const float nearPlane = 0.1f;
+        const float farPlane = 100.0f;
+        const float pi = 3.14159265358979323846f;
+        const float tangent = std::tan((cameraFovDegrees * 0.5f) * pi / 180.0f);
+        const float top = nearPlane * tangent;
+        const float right = top * aspectRatio;
+
+        glMatrixMode(GL_PROJECTION);
+        glLoadIdentity();
+        glFrustum(-right, right, -top, top, nearPlane, farPlane);
+        glMatrixMode(GL_MODELVIEW);
+        glLoadIdentity();
     }
 };

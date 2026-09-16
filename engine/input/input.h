@@ -5,8 +5,19 @@
 #include <fstream>
 #include <string>
 
-// Key state enumeration
-enum KeyState { IDLE, PRESSED };
+// Per-key edge-detected state (down = currently held, pressed/released = edges this frame)
+struct KeyState
+{
+    bool down = false;
+    bool pressed = false;
+    bool released = false;
+};
+
+// Snapshot of the keys the game cares about (WASD, space, esc)
+struct InputSnapshot
+{
+    KeyState w, a, s, d, space, esc;
+};
 
 // Controller input handling
 struct ControllerState 
@@ -42,6 +53,16 @@ protected:
                             std::istreambuf_iterator<char>());
     }
 
+    InputSnapshot snapshot;
+
+    static void UpdateKey(GLFWwindow* window, int key, KeyState& state)
+    {
+        bool isDown = glfwGetKey(window, key) == GLFW_PRESS;
+        state.pressed = isDown && !state.down;
+        state.released = !isDown && state.down;
+        state.down = isDown;
+    }
+
 public:
     void Init()
     {
@@ -50,14 +71,18 @@ public:
         glfwUpdateGamepadMappings(mappings.c_str());
     }
 
-    static KeyState GetKey(GLFWwindow* window, int key) 
+    // Polls the keyboard and updates the pressed/down/released edges for this frame.
+    void Update(GLFWwindow* window)
     {
-        if (glfwGetKey(window, key) == GLFW_PRESS) 
-        {
-            return PRESSED;
-        }
-        return IDLE;
+        UpdateKey(window, GLFW_KEY_W, snapshot.w);
+        UpdateKey(window, GLFW_KEY_A, snapshot.a);
+        UpdateKey(window, GLFW_KEY_S, snapshot.s);
+        UpdateKey(window, GLFW_KEY_D, snapshot.d);
+        UpdateKey(window, GLFW_KEY_SPACE, snapshot.space);
+        UpdateKey(window, GLFW_KEY_ESCAPE, snapshot.esc);
     }
+
+    const InputSnapshot& GetState() const { return snapshot; }
 
     static ControllerState GetGamepad(int jid = GLFW_JOYSTICK_1) 
     {
