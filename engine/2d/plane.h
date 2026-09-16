@@ -1,6 +1,5 @@
 #pragma once
-#include <GL/glew.h>
-#include <GLFW/glfw3.h>
+#include "../platform/gl_platform.h"
 
 class Plane 
 {

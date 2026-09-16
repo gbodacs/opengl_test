@@ -5,7 +5,7 @@
 #include <sstream>
 #include <string>
 
-#include <GL/glew.h>
+#include "../platform/gl_platform.h"
 
 struct Character
 {

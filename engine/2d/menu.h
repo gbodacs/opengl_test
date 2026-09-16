@@ -1,13 +1,13 @@
 #pragma once
 
-#include <GLFW/glfw3.h>
+#include "../platform/gl_platform.h"
 #include <functional>
 #include <string>
 #include <vector>
 
 #include "engine.h"
 #include "font.h"
-#include "input.h"
+#include "../input/input.h"
 
 // A single entry in a Menu. Leaf items run onSelect; items with a non-empty
 // submenu open that submenu instead. iconTexture is left at 0 until graphics

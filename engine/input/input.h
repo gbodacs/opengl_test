@@ -1,6 +1,8 @@
 #pragma once
-#include <GLFW/glfw3.h>
+#include "../platform/gl_platform.h"
 #include <cstdio>
+#include <cmath>
+#include <chrono>
 #include <iterator>
 #include <fstream>
 #include <string>
@@ -13,11 +15,26 @@ struct KeyState
     bool released = false;
 };
 
-// Snapshot of the keys the game cares about (WASD, space, esc)
+// Single-pointer touch state (position in window/surface pixel coordinates),
+// same edge-detection convention as KeyState.
+struct TouchState
+{
+    bool down = false;
+    bool pressed = false;
+    bool released = false;
+    float x = 0.0f;
+    float y = 0.0f;
+};
+
+// Snapshot of the keys the game cares about (WASD, space, esc), plus raw touch.
+// On Android, w/a/s/d/space are synthesized from touch drag/tap gestures so
+// existing keyboard-driven game logic keeps working unmodified.
 struct InputSnapshot
 {
     KeyState w, a, s, d, space, esc;
+    TouchState touch;
 };
+
 
 // Controller input handling
 struct ControllerState 
@@ -55,6 +72,18 @@ protected:
 
     InputSnapshot snapshot;
 
+#if defined(__ANDROID__)
+    // Raw single-pointer touch state, fed by the Android event loop (see
+    // game/android_main.cpp's HandleInput), used to synthesize WASD/space edges.
+    bool rawTouchDown = false;
+    float rawTouchX = 0.0f;
+    float rawTouchY = 0.0f;
+    float touchOriginX = 0.0f;
+    float touchOriginY = 0.0f;
+    bool touchWasDown = false;
+    bool tapCandidate = false;
+    std::chrono::steady_clock::time_point touchDownTime;
+#else
     static void UpdateKey(GLFWwindow* window, int key, KeyState& state)
     {
         bool isDown = glfwGetKey(window, key) == GLFW_PRESS;
@@ -62,8 +91,79 @@ protected:
         state.released = !isDown && state.down;
         state.down = isDown;
     }
+#endif
 
 public:
+#if defined(__ANDROID__)
+    void Init()
+    {
+        // No gamepad mapping database or keyboard on Android; touch is polled directly.
+    }
+
+    // Called from the Android input event callback whenever the primary pointer moves.
+    void SetTouch(float x, float y, bool down)
+    {
+        rawTouchX = x;
+        rawTouchY = y;
+        rawTouchDown = down;
+    }
+
+    // Converts the raw touch pointer into edge-detected WASD/space state:
+    // dragging beyond a small threshold moves the player, a quick tap toggles
+    // jump (mirroring the space bar on desktop).
+    void Update()
+    {
+        snapshot.touch.pressed = rawTouchDown && !touchWasDown;
+        snapshot.touch.released = !rawTouchDown && touchWasDown;
+        snapshot.touch.down = rawTouchDown;
+        snapshot.touch.x = rawTouchX;
+        snapshot.touch.y = rawTouchY;
+
+        const bool prevW = snapshot.w.down, prevA = snapshot.a.down, prevS = snapshot.s.down, prevD = snapshot.d.down, prevSpace = snapshot.space.down;
+        bool w = false, a = false, s = false, d = false, space = false;
+
+        if (snapshot.touch.pressed)
+        {
+            touchOriginX = rawTouchX;
+            touchOriginY = rawTouchY;
+            tapCandidate = true;
+            touchDownTime = std::chrono::steady_clock::now();
+        }
+
+        if (rawTouchDown)
+        {
+            const float dx = rawTouchX - touchOriginX;
+            const float dy = rawTouchY - touchOriginY;
+            const float dragThreshold = 24.0f; // pixels before a drag counts as movement
+            if (std::fabs(dx) > dragThreshold || std::fabs(dy) > dragThreshold)
+            {
+                tapCandidate = false;
+                if (dx > dragThreshold) d = true;
+                if (dx < -dragThreshold) a = true;
+                if (dy > dragThreshold) s = true;
+                if (dy < -dragThreshold) w = true;
+            }
+        }
+
+        if (snapshot.touch.released)
+        {
+            const auto heldMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - touchDownTime).count();
+            if (tapCandidate && heldMs < 300)
+            {
+                space = true; // Quick tap = jump toggle, same as space bar
+            }
+            tapCandidate = false;
+        }
+
+        snapshot.w = { w, w && !prevW, !w && prevW };
+        snapshot.a = { a, a && !prevA, !a && prevA };
+        snapshot.s = { s, s && !prevS, !s && prevS };
+        snapshot.d = { d, d && !prevD, !d && prevD };
+        snapshot.space = { space, space && !prevSpace, !space && prevSpace };
+
+        touchWasDown = rawTouchDown;
+    }
+#else
     void Init()
     {
         // Load updated mappings (fixes glfwJoystickIsGamepad returning false)
@@ -81,9 +181,11 @@ public:
         UpdateKey(window, GLFW_KEY_SPACE, snapshot.space);
         UpdateKey(window, GLFW_KEY_ESCAPE, snapshot.esc);
     }
+#endif
 
     const InputSnapshot& GetState() const { return snapshot; }
 
+#if !defined(__ANDROID__)
     static ControllerState GetGamepad(int jid = GLFW_JOYSTICK_1) 
     {
         ControllerState state = { false, 0.0f, 0.0f, false };
@@ -122,4 +224,5 @@ public:
         }
         return state;
     }
+#endif
 };

@@ -44,5 +44,9 @@ public:
     
     bool Init();
     bool Run();
+    // Runs exactly one frame (input poll, game logic, render, present). Used
+    // directly by Run()'s loop on desktop, and driven by the Android event
+    // loop's per-iteration tick on Android (see game/android_main.cpp).
+    void Step();
     bool Done();
 };

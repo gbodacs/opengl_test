@@ -1,7 +1,12 @@
 #pragma once
 
-#include <GL/glew.h>
-#include <GLFW/glfw3.h>
+#include "../platform/gl_platform.h"
+
+#if defined(__ANDROID__)
+    #include <EGL/egl.h>
+    #include <android/native_window.h>
+#endif
+
 #include <cmath>
 #include <iostream>
 #include <thread>
@@ -16,10 +21,46 @@
 #include "../3d/mesh.h"
 #include "../3d/objloader.h"
 
+// Builds a column-major orthographic projection matrix (glOrtho equivalent),
+// usable with glLoadMatrixf on both desktop GL and GLES 1.1 (which has no glOrtho).
+inline void BuildOrthoMatrix(float left, float right, float bottom, float top, float nearZ, float farZ, GLfloat* m)
+{
+    for (int i = 0; i < 16; ++i) m[i] = 0.0f;
+    m[0] = 2.0f / (right - left);
+    m[5] = 2.0f / (top - bottom);
+    m[10] = -2.0f / (farZ - nearZ);
+    m[12] = -(right + left) / (right - left);
+    m[13] = -(top + bottom) / (top - bottom);
+    m[14] = -(farZ + nearZ) / (farZ - nearZ);
+    m[15] = 1.0f;
+}
+
+// Builds a column-major perspective (frustum) projection matrix, usable with
+// glLoadMatrixf on both desktop GL and GLES 1.1 (which has no glFrustum).
+inline void BuildFrustumMatrix(float left, float right, float bottom, float top, float nearZ, float farZ, GLfloat* m)
+{
+    for (int i = 0; i < 16; ++i) m[i] = 0.0f;
+    m[0] = (2.0f * nearZ) / (right - left);
+    m[5] = (2.0f * nearZ) / (top - bottom);
+    m[8] = (right + left) / (right - left);
+    m[9] = (top + bottom) / (top - bottom);
+    m[10] = -(farZ + nearZ) / (farZ - nearZ);
+    m[11] = -1.0f;
+    m[14] = -(2.0f * farZ * nearZ) / (farZ - nearZ);
+}
+
 class Engine 
 {
 public:
+#if defined(__ANDROID__)
+    ANativeWindow* nativeWindow = nullptr;
+    EGLDisplay eglDisplay = EGL_NO_DISPLAY;
+    EGLSurface eglSurface = EGL_NO_SURFACE;
+    EGLContext eglContext = EGL_NO_CONTEXT;
+    bool closeRequested = false;
+#else
     GLFWwindow* window;
+#endif
     const double TARGET_FPS = 60.0;
     const double FRAME_TIME = 1.0 / TARGET_FPS;
     std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
@@ -140,6 +181,89 @@ public:
         return textureID;
     }
 
+#if defined(__ANDROID__)
+    // Creates the EGL surface/context for a live ANativeWindow. Safe to call
+    // again after DestroySurface() when Android recreates the window
+    // (e.g. after being backgrounded).
+    bool InitAndroid(ANativeWindow* win)
+    {
+        nativeWindow = win;
+
+        if (eglDisplay == EGL_NO_DISPLAY)
+        {
+            eglDisplay = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+            if (eglDisplay == EGL_NO_DISPLAY || !eglInitialize(eglDisplay, nullptr, nullptr))
+                return false;
+        }
+
+        const EGLint attribs[] = {
+            EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
+            EGL_RENDERABLE_TYPE, EGL_OPENGL_ES_BIT,
+            EGL_BLUE_SIZE, 8,
+            EGL_GREEN_SIZE, 8,
+            EGL_RED_SIZE, 8,
+            EGL_DEPTH_SIZE, 16,
+            EGL_NONE
+        };
+
+        EGLConfig config;
+        EGLint numConfigs = 0;
+        if (!eglChooseConfig(eglDisplay, attribs, &config, 1, &numConfigs) || numConfigs == 0)
+            return false;
+
+        EGLint format = 0;
+        eglGetConfigAttrib(eglDisplay, config, EGL_NATIVE_VISUAL_ID, &format);
+        ANativeWindow_setBuffersGeometry(nativeWindow, 0, 0, format);
+
+        eglSurface = eglCreateWindowSurface(eglDisplay, config, nativeWindow, nullptr);
+        if (eglSurface == EGL_NO_SURFACE)
+            return false;
+
+        if (eglContext == EGL_NO_CONTEXT)
+        {
+            eglContext = eglCreateContext(eglDisplay, config, EGL_NO_CONTEXT, nullptr);
+            if (eglContext == EGL_NO_CONTEXT)
+                return false;
+        }
+
+        if (eglMakeCurrent(eglDisplay, eglSurface, eglSurface, eglContext) == EGL_FALSE)
+            return false;
+
+        EGLint w = 0, h = 0;
+        eglQuerySurface(eglDisplay, eglSurface, EGL_WIDTH, &w);
+        eglQuerySurface(eglDisplay, eglSurface, EGL_HEIGHT, &h);
+        viewportWidth = w;
+        viewportHeight = h;
+
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glEnable(GL_DEPTH_TEST);
+        glDepthFunc(GL_LEQUAL);
+
+        glViewport(0, 0, viewportWidth, viewportHeight);
+        Begin2DPass();
+        return true;
+    }
+
+    // Tears down just the window surface (called on APP_CMD_TERM_WINDOW); the
+    // EGL display/context are kept so InitAndroid() can cheaply resume.
+    void DestroySurface()
+    {
+        if (eglDisplay != EGL_NO_DISPLAY)
+        {
+            eglMakeCurrent(eglDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+            if (eglSurface != EGL_NO_SURFACE)
+            {
+                eglDestroySurface(eglDisplay, eglSurface);
+                eglSurface = EGL_NO_SURFACE;
+            }
+        }
+        nativeWindow = nullptr;
+    }
+
+    bool ShouldClose() const { return closeRequested; }
+    void RequestClose() { closeRequested = true; }
+#else
     bool Init(int width, int height, const char* title) 
     {
         if (!glfwInit()) 
@@ -169,6 +293,10 @@ public:
         
         return true;
     }
+
+    bool ShouldClose() const { return glfwWindowShouldClose(window); }
+    void RequestClose() { glfwSetWindowShouldClose(window, true); }
+#endif
 
     float UpdateStart() 
     {
@@ -229,7 +357,7 @@ public:
         }
 
         // 3. Szín alaphelyzetbe (hogy a textúra ne legyen sötét)
-        glColor3f(p->red, p->green, p->blue);
+        glColor4f(p->red, p->green, p->blue, 1.0f);
 
         // 4. Maga a rajzolás
         if (p->mirrored) 
@@ -240,12 +368,34 @@ public:
             glScalef(1.0f, 1.0f, 1.0f); // Normál méretezés
         }
 
-        glBegin(GL_QUADS);
-            glTexCoord2f(p->u0, p->v0); glVertex2f(0, 0);
-            glTexCoord2f(p->u1, p->v0); glVertex2f(p->width, 0);
-            glTexCoord2f(p->u1, p->v1); glVertex2f(p->width, p->height);
-            glTexCoord2f(p->u0, p->v1); glVertex2f(0, p->height);
-        glEnd();
+        // GLES has no glBegin/glEnd immediate mode, so the quad is drawn as a
+        // triangle fan from vertex arrays - unchanged on desktop's compat profile.
+        const GLfloat vertices[8] = {
+            0.0f, 0.0f,
+            p->width, 0.0f,
+            p->width, p->height,
+            0.0f, p->height
+        };
+        const GLfloat texCoords[8] = {
+            p->u0, p->v0,
+            p->u1, p->v0,
+            p->u1, p->v1,
+            p->u0, p->v1
+        };
+
+        glEnableClientState(GL_VERTEX_ARRAY);
+        glVertexPointer(2, GL_FLOAT, 0, vertices);
+
+        if (p->textureID != 0)
+        {
+            glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+            glTexCoordPointer(2, GL_FLOAT, 0, texCoords);
+        }
+
+        glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+
+        glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+        glDisableClientState(GL_VERTEX_ARRAY);
 
         glPopMatrix(); // Visszaállítja a mátrixot a rajzolás előtti állapotra
     }
@@ -274,17 +424,33 @@ public:
             glDisable(GL_TEXTURE_2D);
         }
 
-        glColor3f(mesh->red, mesh->green, mesh->blue);
+        glColor4f(mesh->red, mesh->green, mesh->blue, 1.0f);
 
-        glBegin(GL_TRIANGLES);
-        for (unsigned int index : mesh->indices)
+        // GLES 1.1 only guarantees GL_UNSIGNED_SHORT indices, so cache a 16-bit
+        // copy the first time this mesh is drawn (meshes here are small/static).
+        if (mesh->indices16.size() != mesh->indices.size())
         {
-            const MeshVertex& vertex = mesh->vertices[index];
-            glNormal3f(vertex.normal.x, vertex.normal.y, vertex.normal.z);
-            glTexCoord2f(vertex.uv.x, vertex.uv.y);
-            glVertex3f(vertex.position.x, vertex.position.y, vertex.position.z);
+            mesh->indices16.resize(mesh->indices.size());
+            for (size_t i = 0; i < mesh->indices.size(); ++i)
+            {
+                mesh->indices16[i] = static_cast<unsigned short>(mesh->indices[i]);
+            }
         }
-        glEnd();
+
+        glEnableClientState(GL_VERTEX_ARRAY);
+        glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+        glEnableClientState(GL_NORMAL_ARRAY);
+
+        const MeshVertex* base = mesh->vertices.data();
+        glVertexPointer(3, GL_FLOAT, sizeof(MeshVertex), &base->position);
+        glTexCoordPointer(2, GL_FLOAT, sizeof(MeshVertex), &base->uv);
+        glNormalPointer(GL_FLOAT, sizeof(MeshVertex), &base->normal);
+
+        glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(mesh->indices16.size()), GL_UNSIGNED_SHORT, mesh->indices16.data());
+
+        glDisableClientState(GL_NORMAL_ARRAY);
+        glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+        glDisableClientState(GL_VERTEX_ARRAY);
 
         glPopMatrix();
     }
@@ -341,8 +507,15 @@ public:
 
     void UpdateEnd() 
     {
+#if defined(__ANDROID__)
+        if (eglDisplay != EGL_NO_DISPLAY && eglSurface != EGL_NO_SURFACE)
+        {
+            eglSwapBuffers(eglDisplay, eglSurface);
+        }
+#else
         glfwSwapBuffers(window);
         glfwPollEvents();
+#endif
         
         // 3. FPS Limiter
         auto end = std::chrono::high_resolution_clock::now();
@@ -356,8 +529,22 @@ public:
 
     void Done() 
     {
+#if defined(__ANDROID__)
+        DestroySurface();
+        if (eglDisplay != EGL_NO_DISPLAY)
+        {
+            if (eglContext != EGL_NO_CONTEXT)
+            {
+                eglDestroyContext(eglDisplay, eglContext);
+                eglContext = EGL_NO_CONTEXT;
+            }
+            eglTerminate(eglDisplay);
+            eglDisplay = EGL_NO_DISPLAY;
+        }
+#else
         glfwDestroyWindow(window);
         glfwTerminate();
+#endif
     }
 
 private:
@@ -365,8 +552,9 @@ private:
     {
         glDisable(GL_DEPTH_TEST);
         glMatrixMode(GL_PROJECTION);
-        glLoadIdentity();
-        glOrtho(0, viewportWidth, viewportHeight, 0, -10000, 10000);
+        GLfloat ortho[16];
+        BuildOrthoMatrix(0.0f, static_cast<float>(viewportWidth), static_cast<float>(viewportHeight), 0.0f, -10000.0f, 10000.0f, ortho);
+        glLoadMatrixf(ortho);
         glMatrixMode(GL_MODELVIEW);
         glLoadIdentity();
     }
@@ -386,8 +574,9 @@ private:
         const float right = top * aspectRatio;
 
         glMatrixMode(GL_PROJECTION);
-        glLoadIdentity();
-        glFrustum(-right, right, -top, top, nearPlane, farPlane);
+        GLfloat frustum[16];
+        BuildFrustumMatrix(-right, right, -top, top, nearPlane, farPlane, frustum);
+        glLoadMatrixf(frustum);
         glMatrixMode(GL_MODELVIEW);
         glLoadIdentity();
     }

@@ -5,9 +5,17 @@ ma_sound startSound;
 
 bool cGame::Init()
 {
+#if defined(__ANDROID__)
+    // On Android, android_main.cpp already constructed `engine` and called
+    // Engine::InitAndroid() before invoking Init(), since the EGL surface
+    // requires a live ANativeWindow that only exists once the app is resumed.
+    if (engine == nullptr)
+        return false;
+#else
     engine = new Engine();
     if (!engine->Init(1024, 768, "My 2D Engine")) 
         return false;
+#endif
     engine->cameraDistance = 6.0f;
 
     input = new Input();
@@ -25,7 +33,7 @@ bool cGame::Init()
     menu = new Menu({
     { "Start Game", {}, [](){ /* ... */ }, 0, true, true },
     { "Options", { { "Sound", {}, [](){}, 0, true, false }, { "Back", {}, nullptr } } },
-    { "Exit", {}, [this](){ glfwSetWindowShouldClose(engine->window, true); }, 0, true, true }
+    { "Exit", {}, [this](){ engine->RequestClose(); }, 0, true, true }
 });
 
     uiFont.LoadMetadata("data/graph/font/font.fnt");
@@ -172,39 +180,48 @@ bool cGame::UpdateInput(float deltaTime)
 
 bool cGame::Run()
 {
-    bool quit = false;
-    while (!glfwWindowShouldClose(engine->window) && !quit) 
+    while (!engine->ShouldClose()) 
     {
-        float dTime = engine->UpdateStart();
-        input->Update(engine->window);
-        if (gameState == GameStates::Menu)                  // MENU
-        {
-            menu->Update(dTime);
-            bool closeMenu = menu->HandleInput(input->GetState());
-            menu->Render(*engine, uiFont, 50.0f, 50.0f);
-        } else if (gameState == GameStates::Playing)        // GAME
-        {
-            player->Update(dTime);
-            enemy->Update(dTime);
-            demoMeshSpin += dTime * 45.0f;
-            demoMesh->rotationY = demoMeshSpin;
-
-            engine->RenderAllMeshes();
-            engine->RenderAllPlanes();
-
-            if (player->GetPlane()->Intersects((Plane&)*enemy->GetPlane())) 
-            {
-                engine->PrintText(uiFont, 0.0f, 0.0f, "Collision", 1.0f, 1.0f, 1.0f, 1.0f);
-            }
-        }
-        
-
-        engine->UpdateEnd();
-
-        quit = UpdateInput(dTime);
-        
+        Step();
     }
     return true;
+}
+
+void cGame::Step()
+{
+    float dTime = engine->UpdateStart();
+#if defined(__ANDROID__)
+    input->Update();
+#else
+    input->Update(engine->window);
+#endif
+    if (gameState == GameStates::Menu)                  // MENU
+    {
+        menu->Update(dTime);
+        bool closeMenu = menu->HandleInput(input->GetState());
+        menu->Render(*engine, uiFont, 50.0f, 50.0f);
+    } else if (gameState == GameStates::Playing)        // GAME
+    {
+        player->Update(dTime);
+        enemy->Update(dTime);
+        demoMeshSpin += dTime * 45.0f;
+        demoMesh->rotationY = demoMeshSpin;
+
+        engine->RenderAllMeshes();
+        engine->RenderAllPlanes();
+
+        if (player->GetPlane()->Intersects((Plane&)*enemy->GetPlane())) 
+        {
+            engine->PrintText(uiFont, 0.0f, 0.0f, "Collision", 1.0f, 1.0f, 1.0f, 1.0f);
+        }
+    }
+
+    engine->UpdateEnd();
+
+    if (UpdateInput(dTime))
+    {
+        engine->RequestClose();
+    }
 }
 
 bool cGame::Done()
@@ -222,6 +239,7 @@ bool cGame::Done()
     return true;
 }
 
+#if !defined(__ANDROID__)
 int main() 
 {
     printf("Start\n\r");
@@ -232,3 +250,4 @@ int main()
         Game.Done();
     }
 }
+#endif

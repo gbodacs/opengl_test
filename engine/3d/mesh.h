@@ -1,6 +1,6 @@
 #pragma once
 
-#include <GL/glew.h>
+#include "../platform/gl_platform.h"
 
 #include <vector>
 
@@ -29,6 +29,9 @@ class Mesh3D
 public:
     std::vector<MeshVertex> vertices;
     std::vector<unsigned int> indices;
+    // Cached 16-bit copy of indices, since GLES 1.1 only guarantees
+    // GL_UNSIGNED_SHORT support in glDrawElements. Populated lazily by the renderer.
+    std::vector<unsigned short> indices16;
     GLuint textureID = 0;
     float x = 0.0f;
     float y = 0.0f;
