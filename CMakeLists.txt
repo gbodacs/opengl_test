@@ -55,12 +55,15 @@ else()
     find_package(GLEW REQUIRED)
     find_package(glfw3 REQUIRED)
 
-    add_executable(test
+    add_executable(opengl_test
         game/game.cpp
+        engine/3d/gltfloader.cpp
         engine/sound/miniaudio.c
     )
 
-    target_include_directories(test PRIVATE
+    set_target_properties(opengl_test PROPERTIES OUTPUT_NAME test)
+
+    target_include_directories(opengl_test PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/game
         ${CMAKE_CURRENT_SOURCE_DIR}/engine
         ${CMAKE_CURRENT_SOURCE_DIR}/engine/2d
@@ -69,14 +72,25 @@ else()
         ${CMAKE_CURRENT_SOURCE_DIR}/engine/platform
     )
 
-    target_link_libraries(test PRIVATE
+    target_link_libraries(opengl_test PRIVATE
         OpenGL::GL
         GLEW::GLEW
         glfw
     )
 
     if(UNIX)
-        target_link_libraries(test PRIVATE dl pthread)
+        target_link_libraries(opengl_test PRIVATE dl pthread)
+    endif()
+
+    include(CTest)
+    if(BUILD_TESTING)
+        add_executable(animation_tests
+            tests/animation_tests.cpp
+        )
+        target_include_directories(animation_tests PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/engine/3d
+        )
+        add_test(NAME animation_tests COMMAND animation_tests)
     endif()
 endif()
 

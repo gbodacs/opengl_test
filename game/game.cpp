@@ -58,6 +58,18 @@ bool cGame::Init()
     demoMesh->scaleY = 1.25f;
     demoMesh->scaleZ = 1.25f;
 
+    std::string animationError;
+    demoAnimatedMesh = engine->LoadAnimatedMesh("data/models/animated_character.glb", &animationError);
+    if (demoAnimatedMesh != nullptr)
+    {
+        demoAnimatedMesh->x = 2.0f;
+        demoAnimatedMesh->PlayClip("Idle", true);
+    }
+    else
+    {
+        std::cerr << "Animated character not loaded: " << animationError << std::endl;
+    }
+
     player = new Player(40.0f, 40.0f, 131.0f, 251.0f);
     engine->AddPlane(player->GetPlane());
 
@@ -190,6 +202,7 @@ bool cGame::Run()
 void cGame::Step()
 {
     float dTime = engine->UpdateStart();
+    engine->UpdateMeshes(dTime);
 #if defined(__ANDROID__)
     input->Update();
 #else
@@ -232,6 +245,7 @@ bool cGame::Done()
     delete input;
 
     demoMesh = nullptr;
+    demoAnimatedMesh = nullptr;
 
     engine->Done();
     delete engine;

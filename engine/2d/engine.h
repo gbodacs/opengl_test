@@ -20,6 +20,7 @@
 #include "font.h"
 #include "../3d/mesh.h"
 #include "../3d/objloader.h"
+#include "../3d/gltfloader.h"
 
 // Builds a column-major orthographic projection matrix (glOrtho equivalent),
 // usable with glLoadMatrixf on both desktop GL and GLES 1.1 (which has no glOrtho).
@@ -138,6 +139,40 @@ public:
         return mesh;
     }
 
+    AnimatedMesh3D* LoadAnimatedMesh(const char* filename, std::string* error = nullptr)
+    {
+        AnimatedMesh3D* mesh = new AnimatedMesh3D();
+        AnimatedMeshLoadResult result;
+        if (!LoadGLTFAnimatedMesh(filename, *mesh, result, error))
+        {
+            delete mesh;
+            return nullptr;
+        }
+
+        if (!result.embeddedDiffuseImage.empty())
+        {
+            mesh->SetTexture(LoadTextureFromMemory(
+                result.embeddedDiffuseImage.data(), static_cast<int>(result.embeddedDiffuseImage.size())));
+        }
+        else if (!result.diffuseTexturePath.empty())
+        {
+            mesh->SetTexture(LoadTexture(result.diffuseTexturePath.c_str()));
+        }
+
+        if ((!result.embeddedDiffuseImage.empty() || !result.diffuseTexturePath.empty()) && mesh->textureID == 0)
+        {
+            if (error != nullptr)
+            {
+                *error = "Could not load animated glTF base-color texture.";
+            }
+            delete mesh;
+            return nullptr;
+        }
+
+        meshes.insert(mesh);
+        return mesh;
+    }
+
     ~Engine() 
     {
         for (Plane* p : planes) 
@@ -178,6 +213,37 @@ public:
             return 0;
         }
 
+        return textureID;
+    }
+
+    GLuint LoadTextureFromMemory(const unsigned char* bytes, int byteCount)
+    {
+        if (bytes == nullptr || byteCount <= 0)
+        {
+            return 0;
+        }
+
+        GLuint textureID;
+        glGenTextures(1, &textureID);
+        glBindTexture(GL_TEXTURE_2D, textureID);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+        int width = 0;
+        int height = 0;
+        int channelCount = 0;
+        unsigned char* data = stbi_load_from_memory(bytes, byteCount, &width, &height, &channelCount, 0);
+        if (data == nullptr)
+        {
+            glDeleteTextures(1, &textureID);
+            return 0;
+        }
+
+        const GLenum format = channelCount == 4 ? GL_RGBA : GL_RGB;
+        glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+        stbi_image_free(data);
         return textureID;
     }
 
@@ -338,6 +404,14 @@ public:
         }
 
         Begin2DPass();
+    }
+
+    void UpdateMeshes(float deltaSeconds)
+    {
+        for (Mesh3D* mesh : meshes)
+        {
+            mesh->Update(deltaSeconds);
+        }
     }
 
     void DrawPlane(Plane* p) 

@@ -24,6 +24,7 @@ protected:
     Enemy*              enemy;
     Player*             player;
     Mesh3D*             demoMesh = nullptr;
+    AnimatedMesh3D*     demoAnimatedMesh = nullptr;
     GameStates          gameState=GameStates::Playing;
 
     bool UpdateInput(float deltaTime);

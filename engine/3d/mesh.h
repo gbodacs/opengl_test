@@ -1,21 +1,9 @@
 #pragma once
 
 #include "../platform/gl_platform.h"
+#include "math.h"
 
 #include <vector>
-
-struct Vec2f3D
-{
-    float x = 0.0f;
-    float y = 0.0f;
-};
-
-struct Vec3f3D
-{
-    float x = 0.0f;
-    float y = 0.0f;
-    float z = 0.0f;
-};
 
 struct MeshVertex
 {
@@ -27,6 +15,8 @@ struct MeshVertex
 class Mesh3D
 {
 public:
+    virtual ~Mesh3D() = default;
+
     std::vector<MeshVertex> vertices;
     std::vector<unsigned int> indices;
     // Cached 16-bit copy of indices, since GLES 1.1 only guarantees
@@ -54,5 +44,10 @@ public:
     void SetTexture(GLuint texID)
     {
         textureID = texID;
+    }
+
+    virtual void Update(float deltaSeconds)
+    {
+        (void)deltaSeconds;
     }
 };
