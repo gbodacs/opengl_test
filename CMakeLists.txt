@@ -11,6 +11,8 @@ if(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
 endif()
 
+option(BUILD_ANIMATION_TESTS "Build the animation regression test" OFF)
+
 if(ANDROID)
     # --- Android: OpenGL ES 1.1 via EGL, driven by android_native_app_glue ---
     add_library(native_app_glue STATIC
@@ -57,11 +59,10 @@ else()
 
     add_executable(opengl_test
         game/game.cpp
+        game/example_animated_mesh.cpp
         engine/3d/gltfloader.cpp
         engine/sound/miniaudio.c
     )
-
-    set_target_properties(opengl_test PROPERTIES OUTPUT_NAME test)
 
     target_include_directories(opengl_test PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/game
@@ -82,13 +83,15 @@ else()
         target_link_libraries(opengl_test PRIVATE dl pthread)
     endif()
 
-    include(CTest)
-    if(BUILD_TESTING)
+    if(BUILD_ANIMATION_TESTS)
+        enable_testing()
         add_executable(animation_tests
             tests/animation_tests.cpp
+            game/example_animated_mesh.cpp
         )
         target_include_directories(animation_tests PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/engine/3d
+            ${CMAKE_CURRENT_SOURCE_DIR}/game
         )
         add_test(NAME animation_tests COMMAND animation_tests)
     endif()

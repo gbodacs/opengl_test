@@ -1,4 +1,5 @@
 #include "animatedmesh.h"
+#include "example_animated_mesh.h"
 
 #include <cassert>
 #include <cmath>
@@ -55,6 +56,12 @@ int main()
     mesh.Update(0.5f);
     assert(NearlyEqual(mesh.vertices[0].position.x, 1.0f));
     assert(!mesh.IsClipFinished());
+
+    AnimatedMesh3D example = CreateExampleAnimatedMesh();
+    assert(example.IsValidSkin());
+    assert(example.PlayClip("Wave", true));
+    example.Update(0.25f);
+    assert(example.vertices[0].position.x >= -1.0f);
 
     mesh.Update(1.0f);
     assert(NearlyEqual(mesh.vertices[0].position.x, 2.0f));

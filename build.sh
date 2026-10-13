@@ -2,5 +2,5 @@
 cd build
 cmake ..
 cmake --build .
-cp test ../test
+cp opengl_test ../test
 cd ..

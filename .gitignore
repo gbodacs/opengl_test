@@ -4,3 +4,5 @@ test
 bin/
 
 build/
+
+opengl_test

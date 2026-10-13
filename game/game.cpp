@@ -1,5 +1,6 @@
 #include "game.h"
 #include "player.h"
+#include "example_animated_mesh.h"
 
 ma_sound startSound;
 
@@ -58,16 +59,20 @@ bool cGame::Init()
     demoMesh->scaleY = 1.25f;
     demoMesh->scaleZ = 1.25f;
 
-    std::string animationError;
-    demoAnimatedMesh = engine->LoadAnimatedMesh("data/models/animated_character.glb", &animationError);
+    demoAnimatedMesh = new AnimatedMesh3D(CreateExampleAnimatedMesh());
     if (demoAnimatedMesh != nullptr)
     {
+        demoAnimatedMesh->SetTexture(boyIdle);
         demoAnimatedMesh->x = 2.0f;
-        demoAnimatedMesh->PlayClip("Idle", true);
-    }
-    else
-    {
-        std::cerr << "Animated character not loaded: " << animationError << std::endl;
+        demoAnimatedMesh->y = 0.25f;
+        demoAnimatedMesh->z = 0.5f;
+        demoAnimatedMesh->rotationX = -25.0f;
+        demoAnimatedMesh->rotationY = 30.0f;
+        demoAnimatedMesh->scaleX = 0.9f;
+        demoAnimatedMesh->scaleY = 0.9f;
+        demoAnimatedMesh->scaleZ = 0.9f;
+        demoAnimatedMesh->PlayClip("Wave", true);
+        engine->AddMesh(demoAnimatedMesh);
     }
 
     player = new Player(40.0f, 40.0f, 131.0f, 251.0f);

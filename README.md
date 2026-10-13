@@ -30,6 +30,8 @@ The executable is created at `build/test`.
 ./build/test
 ```
 
+The executable expects to be launched with the workspace root as the working directory so repo-relative assets like `data/graph/...` and `data/models/...` resolve correctly.
+
 ## Debugging
 
 ### In VS Code
@@ -92,3 +94,7 @@ engine->PrintText(uiFont, 16.0f, 24.0f, "Hello OpenGL", 1.0f, 1.0f, 1.0f, 0.0f);
 ```
 
 `PrintText` renders each glyph via the existing `Plane` quad path, using per-glyph UV coordinates from the font atlas.
+
+## 3D Model Demo
+
+The engine now includes a minimal OBJ + MTL mesh loader for textured 3D geometry. The current game startup loads `data/models/test_cube.obj`, resolves its diffuse texture from `data/models/test_cube.mtl`, and renders it through the new fixed-function 3D pass before the existing 2D sprites and text.

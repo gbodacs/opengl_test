@@ -9,7 +9,7 @@
         "name": "(gdb) Launch CMake",
         "type": "cppdbg",
         "request": "launch",
-        "program": "${workspaceFolder}/build/test",
+        "program": "${workspaceFolder}/build/opengl_test",
         "args": [],
         "stopAtEntry": false,
         "cwd": "${workspaceFolder}",
